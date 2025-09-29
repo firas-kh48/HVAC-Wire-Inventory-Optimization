@@ -1,0 +1,480 @@
+{% extends "base.html" %}
+{% block content %}
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 8px;">
+        <h3>Delete Wires</h3>
+        <p>Enter quantity to delete (max: <span id="maxQuantity">0</span>):</p>
+        <input type="number" id="deleteQuantity" min="1" value="1" class="form-control" style="margin: 10px 0; width: 100%;">
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+            <button type="button" onclick="closeModal()" class="btn btn-secondary">Cancel</button>
+            <button type="button" onclick="confirmDelete()" class="btn btn-danger">Delete</button>
+        </div>
+    </div>
+</div>
+
+<h1>Wire Recycling</h1>
+
+{% if message %}
+<p><strong>{{ message }}</strong></p>
+{% endif %}
+
+<form method="POST" id="wireForm">
+    <div class="cable-selection">
+        <h2>Select Cable Type</h2>
+        {% for category, sizes in cable_categories.items() %}
+        <div class="cable-category">
+            <h3>{{ category }}:{% if category == 'Red Cable' %}</h3>
+                <div class="sizes-grid">
+                    <label class="size-option">
+                        <input type="radio" name="wire_type" value="{{ category }}" required>
+                        <span class="size-button">Red Cable</span>
+                    </label>
+                </div>
+            {% else %}</h3>
+                <div class="sizes-grid">
+                    {% for size in sizes %}
+                    <label class="size-option">
+                        <input type="radio" name="wire_type" value="{{ category }} {{ size }}" required>
+                        <span class="size-button">{{ size }} AWG</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="form-group">
+        <label for="length">Enter Length (meters):</label>
+        <div class="length-input">
+            <input type="number" 
+                   name="length" 
+                   id="length" 
+                   class="form-control" 
+                   step="0.1" 
+                   min="0.1" 
+                   max="1000" 
+                   placeholder="e.g. 6.3" 
+                   data-required="true">
+            <span class="unit">meters</span>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" name="action" value="add" class="btn btn-primary">Add to Inventory</button>
+        <button type="submit" name="action" value="search" class="btn btn-secondary">Search Available Lengths</button>
+    </div>
+</form>
+
+<script>
+let currentDeleteRef = '';
+let currentMaxQuantity = 0;
+
+function showDeleteModal(ref, maxQuantity) {
+    currentDeleteRef = ref;
+    currentMaxQuantity = maxQuantity;
+    document.getElementById('maxQuantity').textContent = maxQuantity;
+    document.getElementById('deleteQuantity').max = maxQuantity;
+    document.getElementById('deleteQuantity').value = '1';
+    document.getElementById('deleteModal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('deleteModal').style.display = 'none';
+}
+
+function confirmDelete() {
+    const quantity = parseInt(document.getElementById('deleteQuantity').value);
+    if (quantity > 0 && quantity <= currentMaxQuantity) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/';
+        
+        const refInput = document.createElement('input');
+        refInput.type = 'hidden';
+        refInput.name = 'delete_ref';
+        refInput.value = currentDeleteRef;
+        
+        const qtyInput = document.createElement('input');
+        qtyInput.type = 'hidden';
+        qtyInput.name = 'delete_quantity';
+        qtyInput.value = quantity;
+        
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'delete_quantity';
+        
+        form.appendChild(refInput);
+        form.appendChild(qtyInput);
+        form.appendChild(actionInput);
+        document.body.appendChild(form);
+        form.submit();
+    } else {
+        alert(`Please enter a valid quantity between 1 and ${currentMaxQuantity}`);
+    }
+}
+
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const lengthInput = document.getElementById('length');
+    
+    form.addEventListener('submit', function(e) {
+        const action = document.activeElement.value;
+        
+        // If searching, make length not required
+        if (action === 'search') {
+            lengthInput.removeAttribute('required');
+        } else {
+            // For add action, make length required
+            lengthInput.setAttribute('required', 'required');
+        }
+    });
+});
+
+// Handle delete button clicks using event delegation
+document.addEventListener('click', function(event) {
+    // Handle modal close when clicking outside
+    const modal = document.getElementById('deleteModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+    
+    // Handle delete button clicks
+    if (event.target.closest('.delete-btn')) {
+        const button = event.target.closest('.delete-btn');
+        const ref = button.dataset.ref;
+        const quantity = parseInt(button.dataset.quantity);
+        showDeleteModal(ref, quantity);
+        event.preventDefault();
+    }
+});
+
+// Close modal when clicking the close button or cancel
+function closeModal() {
+    document.getElementById('deleteModal').style.display = 'none';
+}
+</script>
+
+<style>
+.cable-selection {
+    margin-bottom: 2rem;
+}
+
+.cable-category {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.cable-category h3 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.sizes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 0.5rem;
+}
+
+.size-option {
+    position: relative;
+    margin: 0;
+}
+
+.size-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.size-button {
+    display: block;
+    padding: 0.75rem 0.5rem;
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    user-select: none;
+}
+
+/* Hover effect */
+.size-option:hover .size-button {
+    background-color: #f0f4ff;
+    border-color: #b8c8ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Active/click effect */
+.size-option:active .size-button {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Checked state */
+.size-option input[type="radio"]:checked + .size-button {
+    background-color: #4a6bff;
+    color: white;
+    border-color: #4a6bff;
+    font-weight: 500;
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Focus state */
+.size-option input[type="radio"]:focus + .size-button {
+    box-shadow: 0 0 0 3px rgba(74, 107, 255, 0.3);
+    outline: none;
+}
+
+/* Hover state for checked button */
+.size-option input[type="radio"]:checked + .size-button:hover {
+    background-color: #3a5bef;
+    border-color: #3a5bef;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.length-input {
+    position: relative;
+    max-width: 200px;
+}
+
+.length-input input[type="number"] {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 2.5rem 0.75rem 0.75rem;
+    font-size: 1rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background-color: #fff;
+    -moz-appearance: textfield;
+}
+
+/* Hide number input arrows */
+.length-input input[type="number"] {
+    -moz-appearance: textfield;
+    -webkit-appearance: textfield;
+    appearance: textfield;
+}
+
+.length-input input[type="number"]::-webkit-outer-spin-button,
+.length-input input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+.unit {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    pointer-events: none;
+}
+
+/* Focus styles */
+.length-input input[type="number"]:focus {
+    border-color: #4a6bff;
+    box-shadow: 0 0 0 3px rgba(74, 107, 255, 0.25);
+    outline: none;
+}
+
+/* Hover effect */
+.length-input:hover input[type="number"] {
+    border-color: #b8c8ff;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-primary {
+    background-color: #4a6bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #3a5bef;
+}
+
+.btn-danger {
+    background-color: #ff4a6b;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #ef3a5b;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+/* Make it more touch-friendly */
+.size-button, .btn, select {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.size-button:active, .btn:active {
+    transform: scale(0.98);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sizes-grid {
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+    }
+}
+</style>
+
+{% if search_results %}
+    <h2>Search Results</h2>
+    <form method="POST" action="{{ url_for('index') }}">
+        <table class="inventory-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="selectAllSearch" onclick="toggleSelectAll('selectAllSearch')"></th>
+                    <th>Reference</th>
+                    <th>Type</th>
+                    <th>Length (m)</th>
+                    <th>Quantity</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ref, data in search_results.items() %}
+                <tr>
+                    <td><input type="checkbox" name="selected_refs" value="{{ ref }}" class="select-checkbox"></td>
+                    <td>{{ ref }}</td>
+                    <td>{{ data['type'] }}</td>
+                    <td>{{ data['length'] }}</td>
+                    <td>
+                        {% if edit_ref == ref %}
+                            <input type="number" name="new_quantity" value="{{ data['quantity'] }}" min="1" style="width:70px;">
+                        {% else %}
+                            {{ data['quantity'] }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if edit_ref == ref %}
+                            <button type="submit" name="action" value="save_edit_{{ ref }}" style="background:#22c55e; color: white; border: none; border-radius: 4px; padding: 4px 8px; margin: 2px;">Save</button>
+                            <button type="submit" name="action" value="cancel_edit" style="background:#64748b; color: white; border: none; border-radius: 4px; padding: 4px 8px; margin: 2px;">Cancel</button>
+                        {% else %}
+                            <div style="display: flex; gap: 5px;">
+                                <button type="submit" name="action" value="edit_{{ ref }}" class="btn btn-secondary" style="padding: 4px 8px;">Edit</button>
+                                <button type="button" data-ref="{{ ref|escapejs }}" data-quantity="{{ data.quantity }}" class="btn btn-danger delete-btn" style="padding: 4px 8px;">Delete</button>
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="form-actions" style="margin-top: 1rem; display: flex; gap: 10px;">
+            <button type="button" class="btn btn-danger" onclick="confirmDeleteSelected('search')">Delete Selected</button>
+            <button type="submit" name="action" value="delete_selected_types" class="btn btn-danger">Delete Type</button>
+        </div>
+    </form>
+{% endif %}
+
+{% if inventory %}
+    <h2>Current Inventory</h2>
+    <form method="POST" action="{{ url_for('index') }}">
+        <table class="inventory-table">
+            <thead>
+                <tr>
+                    <th>Select</th>
+                    <th>Reference</th>
+                    <th>Type</th>
+                    <th>Length (m)</th>
+                    <th>Quantity</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ref, data in inventory.items() %}
+                <tr>
+                    <td><input type="checkbox" name="selected_refs" value="{{ data['reference'] }}"></td>
+                    <td>{{ data['reference'] }}</td>
+                    <td>{{ data['type'] }}</td>
+                    <td>{{ data['length'] }}</td>
+                    <td>
+                        {% if edit_ref == data['reference'] %}
+                            <input type="number" name="new_quantity" value="{{ data['quantity'] }}" min="1" style="width:70px;">
+                        {% else %}
+                            {{ data['quantity'] }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if edit_ref == data['reference'] %}
+                            <button type="submit" name="action" value="save_edit_{{ data['reference'] }}" style="background:#22c55e; color: white; border: none; border-radius: 4px; padding: 4px 8px; margin: 2px;">Save</button>
+                            <button type="submit" name="action" value="cancel_edit" style="background:#64748b; color: white; border: none; border-radius: 4px; padding: 4px 8px; margin: 2px;">Cancel</button>
+                        {% else %}
+                            <div style="display: flex; gap: 5px;">
+                                <button type="submit" name="action" value="edit_{{ data['reference'] }}" class="btn btn-secondary" style="padding: 4px 8px;">Edit</button>
+                                <button type="button" data-ref="{{ data.reference|escapejs }}" data-quantity="{{ data.quantity }}" class="btn btn-danger delete-btn" style="padding: 4px 8px;">Delete</button>
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="form-actions" style="margin-top: 1rem; display: flex; gap: 10px;">
+            <button type="button" class="btn btn-danger" onclick="confirmDeleteSelected('search')">Delete Selected</button>
+            <button type="submit" name="action" value="delete_selected_types" class="btn btn-danger">Delete Type</button>
+        </div>
+    </form>
+    <script>
+        function toggleSelectAll(source) {
+            const checkboxes = document.getElementsByName('selected_refs');
+            for(let i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = source.checked;
+            }
+        }
+    </script>
+{% else %}
+    <p>No items in inventory.</p>
+{% endif %}
+{% endblock %}

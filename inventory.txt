@@ -1,0 +1,32 @@
+Armored 10,2.0,3,AR 10 - 2.0
+Armored 8,22.0,1,AR 8 - 22.0
+Earth 14,22.0,3,Earth14-22.0
+Shielded 3,2.0,2,SH 3 Core - 2.0
+Armored 12,22.0,1,AR 12 - 22.0
+Earth 12,11.0,1,Earth12-11.0
+Earth 12,2.2,1,Earth12-2.2
+Shielded 6,3.7,1,SH 6 Core - 3.7
+Earth 10,2.4,1,Earth10-2.4
+Armored 1,10.9,1,AR 1 - 10.9
+Armored 8,4.7,1,AR 8 - 4.7
+Shielded 4,2.9,1,SH 4 Core - 2.9
+Armored 10,2.4,2,AR 10 - 2.4
+Armored 8,2.4,1,AR 8 - 2.4
+Armored 10,2.3,1,AR 10 - 2.3
+Armored (1/0),1.1,1,AR (1/0) - 1.1
+Earth 6,2.4,1,Earth 6 - 2.4
+Earth 8,2.3,1,Earth 8 - 2.3
+Earth (1/0),15.3,1,Earth (1/0) - 15.3
+Earth 4,4.9,1,Earth 4 - 4.9
+Red Cable 10,12.7,1,Red Cable 10 - 12.7
+Red Cable 2,15.7,1,Red Cable 2 - 15.7
+Red Cable 6,20.8,1,Red Cable 6 - 20.8
+Shielded 3,2.2,1,SH 3 Core - 2.2
+Armored 10,2.5,1,AR 10 - 2.5
+Earth 10,2.2,3,Earth 10 - 2.2
+Armored 6,2.2,1,AR 6 - 2.2
+Earth 14,2.2,1,ER 14 - 2.2
+Red Cable 10,1.2,1,Red Cable 10 - 1.2
+Earth 10,2.3,1,ER 10 - 2.3
+Armored 10,2.2,1,AR 10 - 2.2
+Earth 10,10.4,1,ER 10 - 10.4

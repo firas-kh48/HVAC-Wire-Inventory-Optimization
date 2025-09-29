@@ -1,0 +1,776 @@
+{% extends "base.html" %}
+{% block sticker %}
+<!-- Sticker for printing -->
+<div id="sticker">
+  <span id="sticker-text"></span>
+  <canvas id="sticker-canvas" style="display:none;position:absolute;top:0;left:0;z-index:1000;background:white;" width="265" height="189">
+    Your browser does not support canvas sticker printing.
+  </canvas>
+  <button id="download-sticker-btn" type="button" style="margin-top: 10px;">Download Sticker as PNG</button>
+</div>
+<script>
+function fitStickerText() {
+    const stickerText = document.getElementById('sticker-text');
+    if (!stickerText) return;
+    let fontSize = 1.2; // em
+    stickerText.style.fontSize = fontSize + 'em';
+    stickerText.style.whiteSpace = 'nowrap';
+    stickerText.style.overflow = 'hidden';
+    stickerText.style.textOverflow = 'ellipsis';
+    stickerText.style.transform = '';
+    // Try to shrink until it fits or reaches minimum font size
+    let tries = 0;
+    const minFontSize = 0.18;
+    function shrinkLoop() {
+        while (stickerText.scrollWidth > stickerText.clientWidth && fontSize > minFontSize) {
+            fontSize -= 0.02;
+            stickerText.style.fontSize = fontSize + 'em';
+        }
+        // If still doesn't fit, scale horizontally
+        if (stickerText.scrollWidth > stickerText.clientWidth) {
+            const scale = stickerText.clientWidth / stickerText.scrollWidth;
+            stickerText.style.transform = `scaleX(${scale})`;
+        } else {
+            stickerText.style.transform = '';
+        }
+        // Try a few more times in case layout is delayed
+        if (tries < 6 && stickerText.scrollWidth > stickerText.clientWidth) {
+            tries++;
+            requestAnimationFrame(shrinkLoop);
+        }
+    }
+    shrinkLoop();
+}
+function triggerStickerFit() {
+    setTimeout(fitStickerText, 100);
+}
+function updateStickerCanvas() {
+  drawStickerCanvas();
+}
+window.addEventListener('beforeprint', function() {
+  fitStickerText();
+  drawStickerCanvas();
+  // Show canvas, hide span
+  document.getElementById('sticker-canvas').style.display = 'block';
+  document.getElementById('sticker-text').style.display = 'none';
+});
+window.addEventListener('afterprint', function() {
+  // Restore
+  document.getElementById('sticker-canvas').style.display = 'none';
+  document.getElementById('sticker-text').style.display = 'inline';
+});
+document.addEventListener('DOMContentLoaded', triggerStickerFit);
+window.fitStickerText = fitStickerText;
+(function() {
+    const origSetSticker = window.setStickerReference;
+    window.setStickerReference = function(refText) {
+        const stickerText = document.getElementById('sticker-text');
+        if (stickerText) {
+            stickerText.textContent = refText;
+            setTimeout(fitStickerText, 100);
+            setTimeout(updateStickerCanvas, 150);
+        }
+        if (origSetSticker) origSetSticker.apply(this, arguments);
+    };
+})();
+
+// Download sticker as PNG
+function downloadStickerAsPNG() {
+  drawStickerCanvas();
+  const canvas = document.getElementById('sticker-canvas');
+  // Temporarily show canvas if hidden
+  const oldDisplay = canvas.style.display;
+  canvas.style.display = 'block';
+  // Give time to render
+  setTimeout(() => {
+    const url = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'sticker.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    canvas.style.display = oldDisplay;
+  }, 100);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  const btn = document.getElementById('download-sticker-btn');
+  if (btn) btn.addEventListener('click', downloadStickerAsPNG);
+});
+</script>
+<style>
+@media print {
+    #sticker {
+        position: relative !important;
+        z-index: 1000 !important;
+    }
+    #sticker #sticker-text {
+        display: none !important;
+    }
+    #sticker-canvas {
+        display: block !important;
+        width: 7cm !important;
+        height: 5cm !important;
+        position: absolute !important;
+        right: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        margin: auto !important;
+        background: white !important;
+        z-index: 1001 !important;
+    }
+}
+</style>
+
+{% endblock %}
+
+{% block content %}
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 8px;">
+        <h3>Delete Wires</h3>
+        <p>Enter quantity to delete (max: <span id="maxQuantity">0</span>):</p>
+        <input type="number" id="deleteQuantity" min="1" value="1" class="form-control" style="margin: 10px 0; width: 100%;">
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+            <button type="button" onclick="closeModal('deleteModal')" class="btn btn-secondary">Cancel</button>
+            <button type="button" onclick="confirmDelete()" class="btn btn-danger">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Quantity Modal -->
+<div id="editModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 8px;">
+        <h3>Edit Quantity</h3>
+        <p>Enter new quantity for <span id="editItemName"></span>:</p>
+        <input type="number" id="editQuantity" min="1" value="1" class="form-control" style="margin: 10px 0; width: 100%;">
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+            <button type="button" onclick="closeModal('editModal')" class="btn btn-secondary">Cancel</button>
+            <button type="button" onclick="confirmEdit()" class="btn btn-primary">Update</button>
+        </div>
+    </div>
+</div>
+
+
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+    <h1 style="margin: 0;">Wire Recycling</h1>
+    <div style="font-size: 0.8rem; color: #666; text-align: right;">
+        Designed in 2025 - Petra Engineering
+    </div>
+</div>
+
+{% if message %}
+<p><strong>{{ message }}</strong></p>
+{% endif %}
+
+<form method="POST" id="wireForm">
+    <div class="cable-selection">
+        <h2>Select Cable Type</h2>
+        {% for category, sizes in cable_categories.items() %}
+        <div class="cable-category">
+            <h3>{{ category }}{% if category == 'Shielded' %} (in Core){% else %} (in AWG){% endif %}:</h3>
+            <div class="sizes-grid">
+                {% for size in sizes %}
+                <label class="size-option">
+                    <input type="radio" name="wire_type" value="{{ category }} {{ size }}" required>
+                    <span class="size-button">{{ size }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="form-group">
+        <label for="length">Enter Length (meters):</label>
+        <div class="length-input">
+            <input type="number"
+                   name="length"
+                   id="length"
+                   class="form-control"
+                   step="0.1"
+                   min="0.1"
+                   max="1000"
+                   placeholder="e.g. 6.3"
+                   data-required="true">
+            <span class="unit">meters</span>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" name="action" value="add" class="btn btn-primary">Add to Inventory</button>
+        <button type="submit" name="action" value="search" class="btn btn-secondary">Search Available Lengths</button>
+    </div>
+</form>
+
+<style>
+    /* Print-specific styles */
+    @media print {
+        @page {
+            size: 7cm 5cm;
+            margin: 0;
+        }
+        html, body {
+            width: 7cm !important;
+            height: 5cm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
+        /* Hide everything by default */
+        body * {
+            visibility: hidden;
+        }
+        /* Make the sticker and its children visible */
+        #sticker, #sticker * {
+            visibility: visible;
+        }
+        /* Position the sticker to fill the page */
+        #sticker {
+            display: flex !important;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 7cm;
+            height: 5cm;
+            border: 1px solid #000;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            text-align: center;
+            padding: 0;
+            box-sizing: border-box;
+            margin: 0;
+            border-width: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+
+    /* General page styles */
+    #sticker {
+        display: none; /* Hidden by default in browser view */
+    }
+
+    .cable-selection {
+        margin-bottom: 0.5rem;
+    }
+
+    .cable-category {
+        margin-bottom: 1px;
+        padding: 0.1rem 0.35rem 0.15rem;
+        background: #f8f9fa;
+        border-radius: 1px;
+    }
+
+    .cable-category h3 {
+        margin: 0;
+        color: #2c3e50;
+        font-size: 1.08rem;
+        line-height: 1.18;
+        margin-bottom: 0.35rem;
+        font-weight: 500;
+    }
+
+    .sizes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 5px;
+    }
+
+    .size-option {
+        display: block;
+        position: relative;
+    }
+
+    .size-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+    }
+
+    .size-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.55rem 0.7rem;
+        background-color: #e9ecef;
+        border: 1.2px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 1.03rem;
+        font-weight: 500;
+        text-align: center;
+        transition: all 0.2s ease-in-out;
+        user-select: none;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+    }
+
+    .size-option:hover .size-button {
+        background-color: #dde2e6;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .size-option:active .size-button {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .size-option input[type="radio"]:checked + .size-button {
+        background-color: #4a6bff;
+        color: white;
+        border-color: #4a6bff;
+        font-weight: 500;
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .size-option input[type="radio"]:focus + .size-button {
+        box-shadow: 0 0 0 3px rgba(74, 107, 255, 0.3);
+        outline: none;
+    }
+
+    .size-option input[type="radio"]:checked + .size-button:hover {
+        background-color: #3b56cc;
+    }
+
+    .form-group {
+        margin-bottom: 0.5rem;
+    }
+
+    .length-input {
+        position: relative;
+        max-width: 250px;
+    }
+
+    .length-input input[type="number"] {
+        -moz-appearance: textfield;
+        -webkit-appearance: textfield;
+        appearance: textfield;
+    }
+
+    .length-input input[type="number"]::-webkit-outer-spin-button,
+    .length-input input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        appearance: none;
+        margin: 0;
+    }
+
+    .unit {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        pointer-events: none;
+    }
+
+    .length-input input[type="number"]:focus {
+        border-color: #4a6bff;
+        box-shadow: 0 0 0 3px rgba(74, 107, 255, 0.25);
+        outline: none;
+    }
+
+    .length-input:hover input[type="number"] {
+        border-color: #b8c8ff;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 1rem;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.07);
+    }
+
+    .btn-primary {
+        background-color: #4a6bff;
+        color: white;
+        box-shadow: 0 4px 12px rgba(74,107,255,0.12);
+    }
+    .btn-primary:hover {
+        background-color: #3a5bef;
+    }
+    .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+    .btn-secondary:hover {
+        background-color: #5a6268;
+    }
+    .btn-danger {
+        background-color: #ff4a6b;
+        color: white;
+    }
+    .btn-danger:hover {
+        background-color: #ef3a5b;
+    }
+    .size-button, .btn, select {
+        -webkit-tap-highlight-color: transparent;
+    }
+    .size-button:active, .btn:active {
+        transform: scale(0.98);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .sizes-grid {
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        }
+
+        .form-actions {
+            flex-direction: column;
+        }
+
+        .btn {
+            width: 100%;
+        }
+    }
+</style>
+
+{% if search_results %}
+    <h2>Search Results</h2>
+    <form method="POST" action="{{ url_for('index') }}">
+        <table class="inventory-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="selectAllSearch" onclick="toggleSelectAllTable(this)"></th>
+                    <th>Reference</th>
+                    <th>Type</th>
+                    <th>Length (m)</th>
+                    <th>Quantity</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ref, data in search_results.items() %}
+                <tr>
+                    <td><input type="checkbox" name="selected_refs" value="{{ ref }}" class="select-checkbox"></td>
+                    <td>{{ ref }}</td>
+                    <td>{{ data['type'] }}</td>
+                    <td>{{ data['length'] }}</td>
+                    <td>
+                        {% if edit_ref == ref %}
+                            <input type="number" name="new_quantity" value="{{ data['quantity'] }}" min="1" style="width:70px;">
+                        {% else %}
+                            {{ data['quantity'] }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if edit_ref == ref %}
+                            <button type="submit" name="action" value="save_edit_{{ ref }}" style="background:#22c55e; color: white; border: none; border-radius: 4px; padding: 4px 8px; margin: 2px;">Save</button>
+                            <button type="submit" name="action" value="cancel_edit" style="background:#64748b; color: white; border: none; border-radius: 4px; padding: 4px 8px; margin: 2px;">Cancel</button>
+                        {% else %}
+                            <div style="display: flex; gap: 5px;">
+                                <button type="button" class="btn btn-sm btn-warning edit-btn"
+                                        data-ref="{{ ref }}"
+                                        data-quantity="{{ data.quantity }}"
+                                        data-item-name="{{ data.type }} ({{ data.length }}m)">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" data-ref="{{ ref|escapejs }}" data-quantity="{{ data.quantity }}" class="btn btn-danger delete-btn" style="padding: 4px 8px;">Delete</button>
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="form-actions" style="margin-top: 1rem; display: flex; gap: 10px;">
+            <button type="submit" name="action" value="delete_selected_types" class="btn btn-danger">Delete Type</button>
+        </div>
+    </form>
+{% endif %}
+
+{% if inventory %}
+    <h2>Current Inventory</h2>
+    <form method="POST" action="{{ url_for('index') }}">
+        <table class="inventory-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="selectAllInventory" onclick="toggleSelectAllTable(this)"></th>
+                    <th>Reference</th>
+                    <th>Type</th>
+                    <th>Length (m)</th>
+                    <th>Quantity</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ref, data in inventory.items() %}
+                <tr>
+                    <td><input type="checkbox" name="selected_refs" value="{{ data['reference'] }}"></td>
+                    <td>{{ data['reference'] }}</td>
+                    <td>{{ data['type'] }}</td>
+                    <td>{{ data['length'] }}</td>
+                    <td>
+                        {{ data['quantity'] }}
+                    </td>
+                    <td>
+                        {% if edit_ref == data['reference'] %}
+                            <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('editQuantity').form.submit()" style="margin: 2px;">
+                                Save
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editModal')" style="margin: 2px;">
+                                Cancel
+                            </button>
+                        {% else %}
+                            <div style="display: flex; gap: 5px;">
+                                <button type="button" class="btn btn-warning btn-sm text-white edit-btn"
+                                        data-ref="{{ data.reference|escapejs }}"
+                                        data-quantity="{{ data.quantity }}"
+                                        data-item-name="{{ data.type }} ({{ data.length }}m)">
+                                    Edit
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm delete-btn"
+                                        data-ref="{{ data.reference|escapejs }}"
+                                        data-quantity="{{ data.quantity }}"
+                                        data-item-name="{{ data.type }} ({{ data.length }}m)">
+                                    Delete
+                                </button>
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="form-actions" style="margin-top: 1rem; display: flex; gap: 10px;">
+            <button type="submit" name="action" value="delete_selected_types" class="btn btn-danger">Delete Type</button>
+        </div>
+    </form>
+    <script>
+        function toggleSelectAll(source) {
+            const checkboxes = document.getElementsByName('selected_refs');
+            for(let i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = source.checked;
+            }
+        }
+    </script>
+{% else %}
+    <p>No items in inventory.</p>
+{% endif %}
+
+</div> <!-- Closing the main content div -->
+
+<footer style="text-align: center; padding: 1rem; color: #4a6fa5; font-size: 0.9rem; margin: 2rem 0; font-weight: 500; letter-spacing: 0.5px;">
+    Designed in 2025 - Petra Engineering
+</footer>
+
+<script>
+let currentDeleteRef = '';
+let currentEditRef = '';
+let currentMaxQuantity = 0;
+let currentItemName = '';
+
+// Draw the sticker text vertically on the canvas for printing
+function drawStickerCanvas() {
+  const stickerText = document.getElementById('sticker-text').textContent;
+  const canvas = document.getElementById('sticker-canvas');
+  const ctx = canvas.getContext('2d');
+  // Clear
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Set background
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Rotate text 90deg left, draw centered vertically along right edge
+  ctx.save();
+  // 7cm x 5cm at 96dpi is ~265 x 189 px
+  ctx.translate(canvas.width - 10, canvas.height / 2); // right edge, center
+  ctx.rotate(-Math.PI / 2);
+  // Fit font size to width
+  let fontSize = 64;
+  ctx.font = fontSize + 'px Arial';
+  let textWidth = ctx.measureText(stickerText).width;
+  while (textWidth > canvas.height - 20 && fontSize > 10) {
+    fontSize -= 2;
+    ctx.font = fontSize + 'px Arial';
+    textWidth = ctx.measureText(stickerText).width;
+  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000';
+  ctx.fillText(stickerText, 0, 0);
+  ctx.restore();
+}
+
+// Select All checkboxes for inventory and search tables
+function toggleSelectAllTable(source) {
+    // Find the table containing this checkbox
+    let table = source.closest('table');
+    if (!table) return;
+    // Get all checkboxes in this table with name 'selected_refs'
+    let checkboxes = table.querySelectorAll('input[type="checkbox"][name="selected_refs"]');
+    checkboxes.forEach(cb => cb.checked = source.checked);
+}
+
+function showDeleteModal(ref, maxQuantity, itemName) {
+    currentDeleteRef = ref;
+    currentMaxQuantity = maxQuantity;
+    currentItemName = itemName;
+    document.getElementById('maxQuantity').textContent = maxQuantity;
+    document.getElementById('deleteQuantity').max = maxQuantity;
+    document.getElementById('deleteQuantity').value = '1';
+    document.getElementById('deleteModal').style.display = 'block';
+}
+
+function showEditModal(ref, currentQuantity, itemName) {
+    currentEditRef = ref;
+    currentItemName = itemName;
+    document.getElementById('editItemName').textContent = itemName;
+    document.getElementById('editQuantity').value = currentQuantity;
+    document.getElementById('editQuantity').focus();
+    document.getElementById('editModal').style.display = 'block';
+}
+
+function confirmEdit() {
+    const quantity = parseInt(document.getElementById('editQuantity').value);
+    if (quantity > 0) {
+        submitForm('update_quantity', currentEditRef, quantity);
+    } else {
+        alert('Please enter a valid quantity greater than 0');
+    }
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function confirmDelete() {
+    const quantity = parseInt(document.getElementById('deleteQuantity').value);
+    if (quantity > 0 && quantity <= currentMaxQuantity) {
+        submitForm('delete_quantity', currentDeleteRef, quantity);
+    } else {
+        alert(`Please enter a valid quantity between 1 and ${currentMaxQuantity}`);
+    }
+}
+
+function submitForm(action, ref, quantity) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("index") }}';
+
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = action;
+
+    // For delete_quantity action, use 'delete_ref' and 'delete_quantity' parameter names
+    if (action === 'delete_quantity') {
+        const refInput = document.createElement('input');
+        refInput.type = 'hidden';
+        refInput.name = 'delete_ref';
+        refInput.value = ref;
+
+        const qtyInput = document.createElement('input');
+        qtyInput.type = 'hidden';
+        qtyInput.name = 'delete_quantity';
+        qtyInput.value = quantity;
+
+        form.appendChild(refInput);
+        form.appendChild(qtyInput);
+    } else {
+        // For other actions, use the standard parameter names
+        const refInput = document.createElement('input');
+        refInput.type = 'hidden';
+        refInput.name = 'reference';
+        refInput.value = ref;
+
+        const qtyInput = document.createElement('input');
+        qtyInput.type = 'hidden';
+        qtyInput.name = 'quantity';
+        qtyInput.value = quantity;
+
+        form.appendChild(refInput);
+        form.appendChild(qtyInput);
+    }
+
+    form.appendChild(actionInput);
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function printSticker(stickerValue) {
+    const stickerElement = document.getElementById('sticker');
+    if (stickerElement) {
+        stickerElement.innerText = stickerValue;
+        setTimeout(() => window.print(), 100); // Brief delay for rendering
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Check for a message indicating a new wire was added and trigger print
+    const message = "{{ message|escapejs }}";
+    const addSuccessPrefix = "Wire added to inventory with reference: ";
+    if (message.startsWith(addSuccessPrefix)) {
+        const reference = message.substring(addSuccessPrefix.length);
+        printSticker(reference);
+    }
+    const form = document.querySelector('form');
+    const lengthInput = document.getElementById('length');
+
+    if (form && lengthInput) {
+        form.addEventListener('submit', function(e) {
+            const action = document.activeElement ? document.activeElement.value : '';
+
+            // If searching, make length not required
+            if (action === 'search') {
+                lengthInput.removeAttribute('required');
+            } else if (action === 'add') {
+                // For add action, make length required
+                lengthInput.setAttribute('required', 'required');
+            }
+        });
+    }
+
+    // Handle modal and button clicks using event delegation
+    document.addEventListener('click', function(event) {
+        // Handle modal close when clicking outside
+        const deleteModal = document.getElementById('deleteModal');
+        const editModal = document.getElementById('editModal');
+
+        if (event.target === deleteModal) {
+            closeModal('deleteModal');
+        } else if (event.target === editModal) {
+            closeModal('editModal');
+        }
+
+        // Handle delete button clicks
+        if (event.target.closest('.delete-btn')) {
+            const button = event.target.closest('.delete-btn');
+            const ref = button.dataset.ref;
+            const quantity = parseInt(button.dataset.quantity);
+            const itemName = button.dataset.itemName;
+            showDeleteModal(ref, quantity, itemName);
+            event.preventDefault();
+        }
+
+        // Handle edit button clicks
+        if (event.target.closest('.edit-btn')) {
+            const button = event.target.closest('.edit-btn');
+            const ref = button.dataset.ref;
+            const quantity = parseInt(button.dataset.quantity);
+            const itemName = button.dataset.itemName;
+            showEditModal(ref, quantity, itemName);
+            event.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}
